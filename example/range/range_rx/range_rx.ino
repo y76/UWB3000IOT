@@ -4,7 +4,7 @@
 #define PIN_IRQ 34
 #define PIN_SS 4
 
-#define RNG_DELAY_MS 1000
+#define RNG_DELAY_MS 50
 #define TX_ANT_DLY 16385
 #define RX_ANT_DLY 16385
 #define ALL_MSG_COMMON_LEN 10
@@ -39,7 +39,21 @@ static uint8_t rx_buffer[20];
 static uint32_t status_reg = 0;
 static double tof;
 static double distance;
+
 extern dwt_txconfig_t txconfig_options;
+
+
+void print_message_content(const uint8_t* msg, size_t len) {
+    Serial.print("TX Message [");
+    Serial.print(len);
+    Serial.print(" bytes]: ");
+    for (size_t i = 0; i < len; i++) {
+        if (msg[i] < 0x10) Serial.print("0");
+        Serial.print(msg[i], HEX);
+        Serial.print(" ");
+    }
+    Serial.println();
+}
 
 void setup()
 {
@@ -103,7 +117,9 @@ void loop()
   dwt_writetxdata(sizeof(tx_poll_msg), tx_poll_msg, 0); /* Zero offset in TX buffer. */
   dwt_writetxfctrl(sizeof(tx_poll_msg), 0, 1);          /* Zero offset in TX buffer, ranging. */
 
-  /* Start transmission, indicating that a response is expected so that reception is enabled automatically after the frame is sent and the delay
+
+ // print_message_content(tx_poll_msg, sizeof(tx_poll_msg));
+    /* Start transmission, indicating that a response is expected so that reception is enabled automatically after the frame is sent and the delay
    * set by dwt_setrxaftertxdelay() has elapsed. */
   dwt_starttx(DWT_START_TX_IMMEDIATE | DWT_RESPONSE_EXPECTED);
 
@@ -127,6 +143,15 @@ void loop()
     if (frame_len <= sizeof(rx_buffer))
     {
       dwt_readrxdata(rx_buffer, frame_len, 0);
+      Serial.print("RX Message [");
+      Serial.print(frame_len);
+      Serial.print(" bytes]: ");
+      for (uint32_t i = 0; i < frame_len; i++) {
+          if (rx_buffer[i] < 0x10) Serial.print("0");
+          Serial.print(rx_buffer[i], HEX);
+          Serial.print(" ");
+      }
+      Serial.println();
 
       /* Check that the frame is the expected response from the companion "SS TWR responder" example.
        * As the sequence number field of the frame is not relevant, it is cleared to simplify the validation of the frame. */
