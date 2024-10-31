@@ -20,6 +20,8 @@ static uint32_t message_count = 0;
 static uint32_t last_tx_time = 0;
 static uint32_t successful_ranges = 0;
 static uint32_t failed_ranges = 0;
+static double distance_sum = 0;
+static double last_distance = 0;
 
 /* Default communication configuration. We use default non-STS DW mode. */
 static dwt_config_t config = {
@@ -58,7 +60,7 @@ void print_message_content(const uint8_t* msg, size_t len, const char* prefix) {
         Serial.print(msg[i], HEX);
         Serial.print(" ");
     }
-    Serial.println();
+    //Serial.println();
 }
 
 void print_status_report() {
@@ -73,11 +75,24 @@ void print_status_report() {
         Serial.print("Success rate: ");
         Serial.print(message_count > 0 ? (float)successful_ranges / message_count * 100 : 0);
         Serial.println("%");
+        
+        // Add distance information
+        Serial.print("Last distance: ");
+        Serial.print(last_distance, 2);
+        Serial.println(" m");
+        
+        Serial.print("Average distance: ");
+        if (successful_ranges > 0) {
+            Serial.print(distance_sum / successful_ranges, 2);
+            Serial.println(" m");
+        } else {
+            Serial.println("N/A");
+        }
+        
         Serial.println("===================\n");
         last_report = millis();
     }
 }
-
 void setup()
 {
     Serial.begin(115200);
@@ -150,7 +165,7 @@ void loop()
         if (frame_len <= sizeof(rx_buffer))
         {
             dwt_readrxdata(rx_buffer, frame_len, 0);
-            print_message_content(rx_buffer, frame_len, "RX Response");
+           // print_message_content(rx_buffer, frame_len, "RX Response");
 
             rx_buffer[ALL_MSG_SN_IDX] = 0;
             if (memcmp(rx_buffer, rx_resp_msg, ALL_MSG_COMMON_LEN) == 0)
@@ -174,10 +189,12 @@ void loop()
 
                 tof = ((rtd_init - rtd_resp * (1 - clockOffsetRatio)) / 2.0) * DWT_TIME_UNITS;
                 distance = tof * SPEED_OF_LIGHT;
+                last_distance = distance;
+                distance_sum += distance;
 
                 /* Display computed distance */
-                snprintf(dist_str, sizeof(dist_str), "DIST: %3.2f m", distance);
-                test_run_info((unsigned char *)dist_str);
+               // snprintf(dist_str, sizeof(dist_str), "DIST: %3.2f m", distance);
+                //test_run_info((unsigned char *)dist_str);
                 successful_ranges++;
             }
         }

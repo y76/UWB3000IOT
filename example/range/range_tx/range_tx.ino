@@ -16,6 +16,13 @@ extern SPISettings _fastSPI;
 #define RESP_MSG_TS_LEN 4
 #define POLL_RX_TO_RESP_TX_DLY_UUS 500
 
+// Debug counters
+static uint32_t received_polls = 0;
+static uint32_t sent_responses = 0;
+static uint32_t failed_responses = 0;
+static uint32_t rx_errors = 0;
+static uint32_t last_status_time = 0;
+
 /* Default communication configuration. We use default non-STS DW mode. */
 static dwt_config_t config = {
     9,                /* Channel number. */
@@ -43,8 +50,38 @@ static uint64_t resp_tx_ts;
 
 extern dwt_txconfig_t txconfig_options;
 
+void print_message_content(const uint8_t* msg, size_t len, const char* prefix) {
+    Serial.print(prefix);
+    Serial.print(" [");
+    Serial.print(len);
+    Serial.print(" bytes]: ");
+    for (size_t i = 0; i < len; i++) {
+        if (msg[i] < 0x10) Serial.print("0");
+        Serial.print(msg[i], HEX);
+        Serial.print(" ");
+    }
+    Serial.println();
+}
+
+void print_status_report() {
+    uint32_t current_time = millis();
+    if (current_time - last_status_time >= 5000) { // Every 5 seconds
+        Serial.println("\n=== Responder Status ===");
+        Serial.print("Polls Received: "); Serial.println(received_polls);
+        Serial.print("Responses Sent: "); Serial.println(sent_responses);
+        Serial.print("Failed Responses: "); Serial.println(failed_responses);
+        Serial.print("RX Errors: "); Serial.println(rx_errors);
+        Serial.print("Response Rate: ");
+        Serial.print(received_polls > 0 ? (float)sent_responses / received_polls * 100 : 0);
+        Serial.println("%");
+        Serial.println("=====================\n");
+        last_status_time = current_time;
+    }
+}
+
 void setup()
 {
+  Serial.begin(115200);
   UART_init();
 
   _fastSPI = SPISettings(16000000L, MSBFIRST, SPI_MODE0);
@@ -79,6 +116,16 @@ void setup()
       ;
   }
 
+    // Print configuration
+    Serial.println("\nResponder Configuration:");
+    Serial.print("Channel: "); Serial.println(config.chan);
+    Serial.print("PRF Rate: "); Serial.println(config.txCode > 8 ? "64MHz" : "16MHz");
+    Serial.print("Preamble Length: "); Serial.println(128 << (config.txPreambLength >> 1));
+    Serial.print("Data Rate: "); 
+    Serial.println(config.dataRate == DWT_BR_850K ? "850 kb/s" : 
+                  config.dataRate == DWT_BR_6M8 ? "6.8 Mb/s" : "Unknown");
+    Serial.println();
+
   /* Configure the TX spectrum parameters (power, PG delay and PG count) */
   dwt_configuretxrf(&txconfig_options);
 
@@ -102,6 +149,7 @@ void loop()
   /* Poll for reception of a frame or error/timeout. See NOTE 6 below. */
   while (!((status_reg = dwt_read32bitreg(SYS_STATUS_ID)) & (SYS_STATUS_RXFCG_BIT_MASK | SYS_STATUS_ALL_RX_ERR)))
   {
+    print_status_report();
   };
 
   if (status_reg & SYS_STATUS_RXFCG_BIT_MASK)
@@ -116,12 +164,14 @@ void loop()
     if (frame_len <= sizeof(rx_buffer))
     {
       dwt_readrxdata(rx_buffer, frame_len, 0);
+     // print_message_content(rx_buffer, frame_len, "RX Poll");
 
       /* Check that the frame is a poll sent by "SS TWR initiator" example.
        * As the sequence number field of the frame is not relevant, it is cleared to simplify the validation of the frame. */
       rx_buffer[ALL_MSG_SN_IDX] = 0;
       if (memcmp(rx_buffer, rx_poll_msg, ALL_MSG_COMMON_LEN) == 0)
       {
+        received_polls++;
         uint32_t resp_tx_time;
         int ret;
 
@@ -157,13 +207,19 @@ void loop()
           dwt_write32bitreg(SYS_STATUS_ID, SYS_STATUS_TXFRS_BIT_MASK);
 
           /* Increment frame sequence number after transmission of the poll message (modulo 256). */
+          sent_responses++;
           frame_seq_nb++;
+        }
+        else
+        {
+          failed_responses++;
         }
       }
     }
   }
   else
   {
+    rx_errors++;
     /* Clear RX error events in the DW IC status register. */
     dwt_write32bitreg(SYS_STATUS_ID, SYS_STATUS_ALL_RX_ERR);
   }
