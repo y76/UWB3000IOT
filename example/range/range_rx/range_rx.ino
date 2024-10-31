@@ -23,7 +23,7 @@ static uint32_t failed_ranges = 0;
 
 /* Default communication configuration. We use default non-STS DW mode. */
 static dwt_config_t config = {
-    5,                /* Channel number. */
+    9,                /* Channel number. */
     DWT_PLEN_128,     /* Preamble length. Used in TX only. */
     DWT_PAC8,         /* Preamble acquisition chunk size. Used in RX only. */
     9,                /* TX preamble code. Used in TX only. */
