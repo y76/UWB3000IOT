@@ -50,6 +50,9 @@ extern dwt_config_t config_options;
 extern dwt_txconfig_t txconfig_options;
 extern dwt_txconfig_t txconfig_options_ch9;
 
+unsigned long stsSetupTime = 0;
+bool firstConnection = true;
+
 /*
  * 128-bit STS key to be programmed into CP_KEY register.
  *
@@ -147,10 +150,15 @@ void loop() {
             /*
              * On first loop, configure the STS key & IV, then load them.
              */
+             sleep(18);
             dwt_configurestskey(&cp_key);
             dwt_configurestsiv(&cp_iv);
             dwt_configurestsloadiv();
             firstLoopFlag = 1;
+            
+            Serial.println("start");
+            //Sleep();
+            stsSetupTime = millis();
         }
         else
         {
@@ -162,12 +170,19 @@ void loop() {
         }
 
         /* Activate reception immediately. */
-        dwt_rxenable(DWT_START_RX_IMMEDIATE);
+dwt_rxenable(DWT_START_RX_IMMEDIATE);
 
-        /* Poll for reception of a frame or error/timeout. See NOTE 6 below. */
-        while (!((status_reg = dwt_read32bitreg(SYS_STATUS_ID)) & (SYS_STATUS_RXFCG_BIT_MASK | SYS_STATUS_ALL_RX_TO | SYS_STATUS_ALL_RX_ERR)))
-        { };
-
+/* Poll for reception of a frame or error/timeout. See NOTE 6 below. */
+while (!((status_reg = dwt_read32bitreg(SYS_STATUS_ID)) & (SYS_STATUS_RXFCG_BIT_MASK | SYS_STATUS_ALL_RX_TO | SYS_STATUS_ALL_RX_ERR)))
+{ 
+};
+  if (firstConnection) {
+                unsigned long connectionTime = millis() - stsSetupTime;
+                char timeMsg[64];
+                snprintf(timeMsg, sizeof(timeMsg), "First connection established after STS setup: %lu ms\r\n", connectionTime);
+                UART_puts(timeMsg);
+                //firstConnection = false;
+            }
         /*
          * Need to check the STS has been received and is good.
          */
@@ -194,6 +209,17 @@ void loop() {
                 rx_buffer[ALL_MSG_SN_IDX] = 0;
                 if (memcmp(rx_buffer, rx_poll_msg, ALL_MSG_COMMON_LEN) == 0)
                 {
+
+
+
+                  if (firstConnection) {
+                unsigned long connectionTime = millis() - stsSetupTime;
+                char timeMsg[64];
+                snprintf(timeMsg, sizeof(timeMsg), "First message validated after STS setup: %lu ms\r\n", connectionTime);
+                UART_puts(timeMsg);
+                firstConnection = false;
+            }
+
                     uint32_t resp_tx_time;
                     int ret;
 

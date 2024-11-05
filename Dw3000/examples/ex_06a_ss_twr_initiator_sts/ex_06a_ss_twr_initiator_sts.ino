@@ -226,6 +226,8 @@ void loop() {
         dwt_configurestsiv(&cp_iv);
         dwt_configurestsloadiv();
         firstLoopFlag = 1;
+        delay(1000);
+        Serial.println("start");
     } else {
         dwt_writetodevice(STS_IV0_ID, 0, 4, (uint8_t *)&cp_iv);
         dwt_configurestsloadiv();
@@ -240,11 +242,16 @@ void loop() {
     print_message_content(tx_poll_msg, sizeof(tx_poll_msg), "TX Poll");
     
     dwt_starttx(DWT_START_TX_IMMEDIATE | DWT_RESPONSE_EXPECTED);
+uint32_t wait_start = millis();
 
     while (!((status_reg = dwt_read32bitreg(SYS_STATUS_ID)) & (SYS_STATUS_RXFCG_BIT_MASK | SYS_STATUS_ALL_RX_TO | SYS_STATUS_ALL_RX_ERR)))
-    { 
-        print_status_report();
-    };
+{ 
+    if (millis() - wait_start > 1000) {  // 1 second max wait
+        Serial.println("Forcing timeout - wait too long");
+        break;
+    }
+    print_status_report();
+}
 
     frame_seq_nb++;
 
