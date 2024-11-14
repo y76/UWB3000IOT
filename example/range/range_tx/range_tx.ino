@@ -23,21 +23,20 @@ static uint32_t failed_responses = 0;
 static uint32_t rx_errors = 0;
 static uint32_t last_status_time = 0;
 
-/* Default communication configuration. We use default non-STS DW mode. */
 static dwt_config_t config = {
-    9,                /* Channel number. */
-    DWT_PLEN_128,     /* Preamble length. Used in TX only. */
-    DWT_PAC8,         /* Preamble acquisition chunk size. Used in RX only. */
-    9,                /* TX preamble code. Used in TX only. */
-    9,                /* RX preamble code. Used in RX only. */
-    1,                /* 0 to use standard 8 symbol SFD, 1 to use non-standard 8 symbol, 2 for non-standard 16 symbol SFD and 3 for 4z 8 symbol SDF type */
-    DWT_BR_6M8,       /* Data rate. */
-    DWT_PHRMODE_STD,  /* PHY header mode. */
-    DWT_PHRRATE_STD,  /* PHY header rate. */
-    (129 + 8 - 8),    /* SFD timeout (preamble length + 1 + SFD length - PAC size). Used in RX only. */
-    DWT_STS_MODE_OFF, /* STS disabled */
-    DWT_STS_LEN_64,   /* STS length see allowed values in Enum dwt_sts_lengths_e */
-    DWT_PDOA_M0       /* PDOA mode off */
+    5,                  /* Channel number. */
+    DWT_PLEN_128,      /* Preamble length. Used in TX only. */
+    DWT_PAC8,          /* Preamble acquisition chunk size. Used in RX only. */
+    9,                  /* TX preamble code. Used in TX only. */
+    9,                  /* RX preamble code. Used in RX only. */
+    3,                  /* 0 to use standard 8 symbol SFD, 1 to use non-standard 8 symbol, 2 for non-standard 16 symbol SFD and 3 for 4z 8 symbol SDF type */
+    DWT_BR_6M8,        /* Data rate. */
+    DWT_PHRMODE_STD,   /* PHY header mode. */
+    DWT_PHRRATE_STD,   /* PHY header rate. */
+    (128 + 1 + 8 - 8), /* SFD timeout (preamble length + 1 + SFD length - PAC size). Used in RX only. */
+    DWT_STS_MODE_ND,   /* Mode 3 STS (no data) enabled - most secure */
+    DWT_STS_LEN_128,   /* Maximum STS length for better security */
+    DWT_PDOA_M0        /* PDOA mode off */
 };
 
 static uint8_t rx_poll_msg[] = {0x41, 0x88, 0, 0xCA, 0xDE, 'W', 'A', 'V', 'E', 0xE0, 0, 0};
@@ -49,6 +48,17 @@ static uint64_t poll_rx_ts;
 static uint64_t resp_tx_ts;
 
 extern dwt_txconfig_t txconfig_options;
+
+static dwt_sts_cp_key_t cp_key =
+{
+    0x14EB220F, 0xF86050A8, 0xD1D336AA, 0x14148674
+};
+
+static dwt_sts_cp_iv_t cp_iv =
+{
+    0x1F9A3DE4, 0xD37EC3CA, 0xC44FA8FB, 0x362EEB34
+};
+
 
 void print_message_content(const uint8_t* msg, size_t len, const char* prefix) {
     Serial.print(prefix);
@@ -115,6 +125,16 @@ void setup()
     while (1)
       ;
   }
+
+ // Configure STS key and IV
+    dwt_configurestskey(&cp_key);
+    dwt_configurestsiv(&cp_iv);
+    
+    // Load the IV
+    dwt_configurestsloadiv();
+    
+    // Enable STS mode (Mode 3 - most secure, no data)
+    dwt_configurestsmode(DWT_STS_MODE_ND);
 
     // Print configuration
     Serial.println("\nResponder Configuration:");
